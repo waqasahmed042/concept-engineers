@@ -22,7 +22,14 @@ import {
   Flame, 
   HelpCircle,
   ExternalLink,
-  Info
+  Info,
+  Smartphone,
+  Send,
+  Check,
+  RefreshCw,
+  Sliders,
+  Eye,
+  Shield
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -92,6 +99,21 @@ export default function App() {
   const [signProgress, setSignProgress] = useState<"pending" | "signed">("pending");
   const [signerName, setSignerName] = useState("");
   const [signerDate, setSignerDate] = useState("");
+
+  // Interactive options for DocuSeal, mobile perspective, and verification
+  const [signingEngine, setSigningEngine] = useState<"portal" | "docuseal">("portal");
+  const [viewportPerspective, setViewportPerspective] = useState<"workspace" | "mobile">("workspace");
+  const [docusealStatus, setDocusealStatus] = useState<"idle" | "preparing" | "sent" | "signing_completed">("idle");
+  const [docusealTemplateId, setDocusealTemplateId] = useState("ce_residential_v2_as2870");
+  const [docusealFieldMapping, setDocusealFieldMapping] = useState({
+    clientNamePlaceholder: "{client_name}",
+    addressPlaceholder: "{project_address}",
+    feePlaceholder: "{fee_aud}"
+  });
+  const [smsVerification, setSmsVerification] = useState(false);
+  const [smsVerified, setSmsVerified] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [smsSent, setSmsSent] = useState(false);
   
   // Archival system state
   const [contractsArchive, setContractsArchive] = useState<any[]>(() => {
@@ -140,6 +162,19 @@ export default function App() {
   useEffect(() => {
     setSignerDate(new Date().toLocaleDateString("en-AU"));
   }, []);
+
+  // Synchronise DocuSeal template ID with project type
+  useEffect(() => {
+    if (projectType === "Residential") {
+      setDocusealTemplateId("tmpl_ce_res_as2870");
+    } else if (projectType === "Commercial") {
+      setDocusealTemplateId("tmpl_ce_com_as1170");
+    } else if (projectType === "Subdivision") {
+      setDocusealTemplateId("tmpl_ce_sub_wsud");
+    } else {
+      setDocusealTemplateId("tmpl_ce_custom_as3600");
+    }
+  }, [projectType]);
 
   // Request proposal generation from our Express proxy + Gemini Model
   const handleGenerateProposal = async () => {
@@ -260,13 +295,16 @@ By signing below, the Client represents legal authorization and requests Concept
 
   // Canvas Drawing Logic for Signature
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if ("touches" in e) {
+      if (e.cancelable) e.preventDefault();
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
-    ctx.strokeStyle = "#1e3a8a"; // Deep corporate blue
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#F27D26"; // Vibrant brand accent color for digital ink
+    ctx.lineWidth = 3.5;
     ctx.lineCap = "round";
 
     const coords = getEventCoords(e);
@@ -276,6 +314,9 @@ By signing below, the Client represents legal authorization and requests Concept
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if ("touches" in e) {
+      if (e.cancelable) e.preventDefault();
+    }
     if (!isDrawing) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -447,6 +488,42 @@ By signing below, the Client represents legal authorization and requests Concept
                     </div>
 
                     <div className="space-y-5">
+                      {/* E-Signing Protocol Selector */}
+                      <div className="p-3.5 rounded-xl bg-[#0F1115] border border-[#2A2D35]">
+                        <label className="text-[10px] font-mono font-bold text-[#5C616F] uppercase tracking-wider flex items-center justify-between mb-2">
+                          <span>E-Signing Protocol</span>
+                          <span className="text-[#F27D26] flex items-center gap-1 font-sans text-[10px] uppercase font-bold">
+                            <Sliders className="h-3 w-3" /> dispatch configuration
+                          </span>
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSigningEngine("portal")}
+                            className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-all ${
+                              signingEngine === "portal"
+                                ? "border-[#F27D26] bg-[#21242C]/80 text-white"
+                                : "border-[#2A2D35] bg-[#1A1D23] text-[#A0A0A0] hover:text-white hover:bg-[#1f2228]"
+                            }`}
+                          >
+                            <span className="text-[11px] font-bold">Concept E-Sign Portal</span>
+                            <span className="text-[8.5px] font-mono text-[#A0A0A0] mt-0.5 leading-tight">No-Login Secure Touch Signature</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSigningEngine("docuseal")}
+                            className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-all ${
+                              signingEngine === "docuseal"
+                                ? "border-[#F27D26] bg-[#21242C]/80 text-white"
+                                : "border-[#2A2D35] bg-[#1A1D23] text-[#A0A0A0] hover:text-white hover:bg-[#1f2228]"
+                            }`}
+                          >
+                            <span className="text-[11px] font-bold">DocuSeal Integration Plan</span>
+                            <span className="text-[8.5px] font-mono text-[#A0A0A0] mt-0.5 leading-tight">Variables Mapped via DocuSeal API</span>
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Client Name Input */}
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[11px] font-bold text-[#5C616F] uppercase flex items-center justify-between">
@@ -571,6 +648,82 @@ By signing below, the Client represents legal authorization and requests Concept
                           className="block w-full rounded-lg border border-[#3D414D] bg-[#0F1115] p-3 text-sm text-white placeholder:text-[#5C616F] focus:outline-hidden focus:border-[#F27D26] focus:ring-1 focus:ring-[#F27D26] transition-all resize-none"
                         />
                       </div>
+
+                      {/* Signing protocol sub-settings */}
+                      {signingEngine === "portal" ? (
+                        <div className="p-3 bg-[#0F1115] rounded-xl border border-[#2A2D35] text-xs space-y-2.5">
+                          <label className="font-mono text-[9px] font-bold uppercase text-[#5C616F] tracking-wider flex items-center justify-between">
+                            <span>Mobile Security Verification</span>
+                            <span className="text-emerald-400 font-sans text-[9px] font-bold uppercase">No login required</span>
+                          </label>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#A0A0A0] text-[11px] font-semibold">Instant SMS Verification simulator?</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSmsVerification(!smsVerification);
+                                setSmsSent(false);
+                                setSmsVerified(false);
+                              }}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                                smsVerification ? "bg-[#F27D26]" : "bg-[#2A2D35]"
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                  smsVerification ? "translate-x-4" : "translate-x-0"
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          {smsVerification && (
+                            <p className="text-[10px] text-[#A0A0A0] leading-tight italic font-mono">
+                              Secures mobile screen touch-sign with a quick 4-digit verification code. Keeps user authorization absolute.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-[#0F1115] rounded-xl border border-[#2A2D35] text-xs space-y-3">
+                          <div className="flex items-center justify-between pb-1.5 border-b border-[#1f2228]">
+                            <span className="font-mono text-[9.5px] font-extrabold text-[#F27D26] uppercase flex items-center gap-1">
+                              <Shield className="w-3 h-3 text-[#F27D26]" />
+                              DocuSeal API Configuration
+                            </span>
+                            <span className="text-[9px] font-mono text-emerald-400 bg-[#142A24] border border-[#1E4D3E] px-1.5 py-0.5 rounded font-bold">API Synced</span>
+                          </div>
+                          
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono font-bold uppercase text-[#5C616F]">DocuSeal Template Target ID</label>
+                            <input
+                              type="text"
+                              value={docusealTemplateId}
+                              onChange={(e) => setDocusealTemplateId(e.target.value)}
+                              className="w-full bg-[#1A1D23] border border-[#2A2D35] rounded-md p-1.5 text-xs text-white font-mono focus:outline-hidden focus:border-[#F27D26]"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-mono font-bold uppercase text-[#5C616F] flex justify-between">
+                              <span>Template Tag Variables Binding</span>
+                              <span className="text-purple-400 text-[8.5px] lowercase font-bold">Autodetect active</span>
+                            </label>
+                            <div className="grid grid-cols-3 gap-1 font-mono text-[9px] bg-[#1A1D23] p-1.5 rounded border border-[#2A2D35]">
+                              <div className="text-center border-r border-[#2A2D35] py-0.5">
+                                <span className="block text-[#5C616F] text-[8px] uppercase">Client Name</span>
+                                <span className="text-white font-bold">{docusealFieldMapping.clientNamePlaceholder}</span>
+                              </div>
+                              <div className="text-center border-r border-[#2A2D35] py-0.5">
+                                <span className="block text-[#5C616F] text-[8px] uppercase">Address</span>
+                                <span className="text-white font-bold">{docusealFieldMapping.addressPlaceholder}</span>
+                              </div>
+                              <div className="text-center py-0.5">
+                                <span className="block text-[#5C616F] text-[8px] uppercase">Fixed Fee</span>
+                                <span className="text-white font-bold">{docusealFieldMapping.feePlaceholder}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-6 border-t border-[#2A2D35] pt-5">
@@ -636,228 +789,696 @@ By signing below, the Client represents legal authorization and requests Concept
                   ) : (
                     <div className="space-y-6">
                       
-                      {/* Interactive Link Proxy Card */}
-                      <div className="rounded-2xl border border-[#2A2D35] bg-[#1A1D23] p-5 shadow-xl">
-                        <div className="flex items-center justify-between pb-3.5 border-b border-[#2A2D35] mb-4">
-                          <h4 className="font-display font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                            <Globe className="h-4 w-4 text-[#F27D26]" />
-                            Secure Customized Domain link
-                          </h4>
-                          <span className="font-mono text-[9px] text-[#F27D26] bg-[#21242C] px-2.5 py-0.5 rounded border border-[#F27D26]/20 font-bold">
-                            SSL Sec: Valid (HTTPS)
-                          </span>
+                      {/* Interactive Workspace Viewport Toolbar */}
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#1A1D23] border border-[#2A2D35] rounded-2xl p-4 shadow-xl">
+                        <div className="flex items-center gap-2.5">
+                          <div className="bg-[#21242C] p-2 rounded-lg border border-[#F27D26]/20">
+                            <Eye className="h-4.5 w-4.5 text-[#F27D26]" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-mono text-[#A0A0A0] block uppercase tracking-wider">Viewport Simulator</span>
+                            <span className="text-sm font-bold text-white">Select client perspective mode</span>
+                          </div>
                         </div>
-
-                        <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:space-x-3 items-stretch">
-                          <div className="flex-1">
-                            <label className="text-[10px] font-mono font-bold uppercase text-[#5C616F] tracking-wider">
-                              A-Record Target Domain Link (DocuSeal Link Proxy)
-                            </label>
-                            <div className="mt-1.5 flex rounded-lg overflow-hidden border border-[#3D414D]">
-                              <span className="inline-flex items-center bg-[#0F1115] px-3 text-xs font-mono text-[#5C616F] select-all border-r border-[#3D414D]">
-                                sign.conceptengineers.com.au/sign/
-                              </span>
-                              <input
-                                type="text"
-                                readOnly
-                                value={`proposal_${projectType.toLowerCase()}_${clientName.replace(/\s+/g, "").toLowerCase().substring(0, 8)}`}
-                                className="block w-full min-w-0 bg-[#0F1115] p-2 text-xs font-mono text-white focus:outline-hidden"
-                              />
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-end">
-                            <button
-                              type="button"
-                              onClick={handleCopyText}
-                              className="w-full sm:w-auto inline-flex items-center justify-center rounded-lg border border-[#3D414D] bg-[#0F1115] text-white hover:bg-[#21242C] hover:border-[#F27D26] px-4 py-2.5 text-xs font-bold transition-all"
-                            >
-                              <Copy className="mr-1.5 h-3.5 w-3.5 text-[#F27D26]" />
-                              {copiedText ? "Copied" : "Copy Content"}
-                            </button>
-                          </div>
+                        <div className="flex space-x-1 bg-[#0F1115] border border-[#2A2D35] p-1 rounded-lg w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={() => setViewportPerspective("workspace")}
+                            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                              viewportPerspective === "workspace"
+                                ? "bg-[#F27D26] text-black font-extrabold"
+                                : "text-[#A0A0A0] hover:text-white hover:bg-[#1A1D23]"
+                            }`}
+                          >
+                            <Server className="w-3.5 h-3.5" />
+                            🖥️ Tablet/Desktop
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setViewportPerspective("mobile")}
+                            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                              viewportPerspective === "mobile"
+                                ? "bg-[#F27D26] text-black font-extrabold"
+                                : "text-[#A0A0A0] hover:text-white hover:bg-[#1A1D23]"
+                            }`}
+                          >
+                            <Smartphone className="w-3.5 h-3.5" />
+                            📱 Mobile (No Login)
+                          </button>
                         </div>
                       </div>
 
-                      {/* Professional Contract Sandbox Window */}
-                      <div className="rounded-2xl border border-[#2A2D35] bg-[#1A1D23] shadow-2xl overflow-hidden">
-                        
-                        {/* Interactive DocuSeal Header Block */}
-                        <div className="bg-[#0F1115] px-5 py-3.5 flex items-center justify-between text-white border-b border-[#2A2D35]">
-                          <div className="flex items-center space-x-2.5">
-                            <Signature className="h-4.5 w-4.5 text-[#F27D26]" />
-                            <span className="text-xs font-mono tracking-wider font-semibold text-white/90">
-                              sign.conceptengineers.com.au — Client Mobile Sign Sheet
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-1.5">
-                            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Active</span>
-                          </div>
-                        </div>
+                      {/* RENDERING SMARTPHONE PREVIEW PERSPECTIVE */}
+                      {viewportPerspective === "mobile" ? (
+                        <div className="flex justify-center py-4 bg-[#0F1115] rounded-2xl border border-[#2A2D35] p-4">
+                          {/* Inner phone wrapper */}
+                          <div className="relative w-full max-w-[375px] bg-[#12141A] border-[8px] border-[#2A2D35] rounded-[40px] shadow-2xl flex flex-col overflow-hidden h-[740px] ring-4 ring-[#F27D26]/5">
+                            
+                            {/* Smartphone top bezel camera notch */}
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-5 bg-[#2A2D35] rounded-b-xl z-20 flex items-center justify-center">
+                              <div className="w-10 h-1 bg-[#0F1115] rounded-full mr-2"></div>
+                              <div className="w-2 h-2 bg-[#0F1115] rounded-full border border-slate-700"></div>
+                            </div>
 
-                        {/* Split Interface: Scrollable Text + Signing Panel */}
-                        <div className="grid grid-cols-1 md:grid-cols-12 min-h-[500px]">
-                          
-                          {/* Left Half: Embedded Proposal Contract Content */}
-                          <div id="document-viewer" className="md:col-span-7 bg-[#0F1115] border-r border-[#2A2D35] p-6 text-sm text-[#E0E0E0] max-h-[500px] overflow-y-auto select-text font-mono scrollbar-thin">
-                            {loading ? (
-                              <div className="flex flex-col items-center justify-center h-full space-y-3 py-20">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F27D26]"></div>
-                                <span className="text-xs font-mono text-[#A0A0A0]">Drafting scope items...</span>
+                            {/* Simulated Smartphone Screen OS Environment */}
+                            <div className="flex-1 overflow-y-auto pt-6 flex flex-col h-full scrollbar-none select-none relative">
+                              {/* OS Status Bar */}
+                              <div className="px-4 py-1 flex justify-between items-center text-[9px] font-mono text-[#5C616F] shrink-0 bg-[#0F1115]">
+                                <span>09:41 AM</span>
+                                <div className="flex items-center gap-1 font-sans">
+                                  <span>5G 📶</span>
+                                  <span>100% 🔋</span>
+                                </div>
                               </div>
-                            ) : (
-                              <div className="prose prose-invert max-w-none text-xs">
-                                {/* Corporate Header Layout */}
-                                <div className="border-b-2 border-[#2A2D35] pb-4 mb-5 flex justify-between items-start">
-                                  <div>
-                                    <h4 className="font-display text-base font-bold text-white tracking-tight uppercase">
-                                      CONCEPT ENGINEERS PTY LTD
-                                    </h4>
-                                    <p className="text-[9px] text-[#A0A0A0] font-mono mt-0.5">
-                                      AS Civil & Structural Registered Consultants • sign.conceptengineers.com.au
-                                    </p>
+
+                              {/* Browser address bar replica */}
+                              <div className="bg-[#1A1D23] px-3 py-1.5 border-b border-[#2A2D35] flex items-center justify-between shrink-0">
+                                <span className="text-[10px] font-mono text-[#A0A0A0] truncate flex items-center gap-1">
+                                  🔒 sign.conceptengineers.com.au/...
+                                </span>
+                                <span className="text-[10px] font-bold text-[#F27D26]">Refreshed</span>
+                              </div>
+
+                              {/* Security banner explaining NO LOGIN required */}
+                              <div className="bg-[#142A24] border-b border-[#1E4D3E] p-3 text-xs text-white shrink-0">
+                                <div className="flex items-center gap-1.5 text-emerald-400 font-extrabold text-[11px] uppercase tracking-wide">
+                                  <Shield className="w-3.5 h-3.5 shrink-0" />
+                                  Secure Token Login Link
+                                </div>
+                                <p className="text-[10.5px] text-[#A0A0A0] mt-1 leading-normal">
+                                  System verified individual token. Client <strong>{signerName || "Representative"}</strong> is signing without need for credentials or registration.
+                                </p>
+                              </div>
+
+                              {/* CHOSEN ENGINE: ENTIRE NATIVE PORTAL SIMULATOR INSIDE THE SMARTPHONE */}
+                              {signingEngine === "portal" ? (
+                                <div className="p-4 space-y-4 flex-1 flex flex-col bg-[#0F1115]">
+                                  <div className="rounded-lg border border-[#2A2D35] bg-[#1A1D23] p-3 text-left">
+                                    <h4 className="text-[10px] font-mono text-emerald-400 font-extrabold uppercase mb-1">Contract summary</h4>
+                                    <p className="text-white text-xs font-bold truncate">{clientName}</p>
+                                    <p className="text-[#A0A0A0] text-[10px] truncate">{projectAddress}</p>
+                                    <p className="text-white text-xs font-mono font-bold mt-1">${parseFloat(fee).toLocaleString("en-AU")} AUD (ex. GST)</p>
                                   </div>
-                                  <div>
-                                    <span className="rounded bg-[#21242C] border border-[#F27D26]/30 px-2 py-0.5 text-[9px] font-mono font-bold text-[#F27D26] uppercase">
-                                      E-SIGN CONTRACT
-                                    </span>
+
+                                  {/* Custom Scope Scroll Area */}
+                                  <div className="rounded-lg border border-[#2A2D35] bg-[#0F1115] p-3 h-48 overflow-y-auto text-[9.5px] font-mono text-[#C0C0C0] leading-relaxed select-text shadow-inner">
+                                    <div className="border-b border-[#2A2D35] pb-2 mb-2 text-center">
+                                      <span className="text-[8px] font-bold uppercase tracking-widest text-[#F27D26] block">Legal Document View</span>
+                                      <span className="text-[8px] text-[#5C616F]">AS (AUSTRALIAN CODES) STANDARD</span>
+                                    </div>
+                                    <div className="whitespace-pre-wrap font-sans text-[10px] text-[#D0D0D0]">
+                                      {generatedProposal}
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="whitespace-pre-wrap font-sans text-[#E0E0E0] leading-relaxed text-xs">
-                                  {generatedProposal}
-                                </div>
-                              </div>
-                            )}
-                          </div>
 
-                          {/* Right Half: Mobile Sign Pad Frame */}
-                          <div className="md:col-span-5 bg-[#191C21] p-5 flex flex-col justify-between border-t md:border-t-0 border-[#2A2D35]">
-                            <div>
-                              <div className="flex items-center space-x-2 text-[#F27D26] mb-2.5">
-                                <FileCheck className="h-4.5 w-4.5" />
-                                <h5 className="font-display font-semibold text-white text-xs uppercase tracking-wider">
-                                  Verification E-Sign Pad
-                                </h5>
-                              </div>
-                              <p className="text-[11px] text-[#A0A0A0] mb-4 leading-relaxed">
-                                Clients securely sign from any touchscreen or cursor with 0 logging credentials required. Draw on the block to digitize.
-                              </p>
-
-                              <div className="space-y-4">
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-[9px] font-mono font-bold uppercase text-[#5C616F]">
-                                    Signer Signature Name
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={signerName}
-                                    onChange={(e) => setSignerName(e.target.value)}
-                                    placeholder="Confirm Signer Name"
-                                    className="bg-[#0F1115] border border-[#3D414D] rounded-md p-2 text-xs text-white focus:outline-none focus:border-[#F27D26] transition-all"
-                                  />
-                                </div>
-
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-[9px] font-mono font-bold uppercase text-[#5C616F]">
-                                    System Signing Timestamp
-                                  </label>
-                                  <input
-                                    type="text"
-                                    disabled
-                                    value={signerDate}
-                                    className="bg-[#0F1115] border border-[#2A2D35] rounded-md p-2 text-xs text-[#A0A0A0] font-mono"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Canvas Box */}
-                              <div className="mt-4">
-                                <div className="flex items-center justify-between mb-1">
-                                  <label className="text-[9px] font-mono font-bold uppercase text-[#5C616F]">
-                                    Digital Ink Canvas
-                                  </label>
-                                  <button
-                                    onClick={clearCanvas}
-                                    className="text-[10px] text-red-400 hover:text-red-300 font-semibold"
-                                  >
-                                    Reset / Clear
-                                  </button>
-                                </div>
-
-                                <div className="relative border-2 border-dashed border-[#3D414D] rounded-lg bg-[#0F1115] overflow-hidden cursor-crosshair">
-                                  {signProgress === "pending" ? (
-                                    <canvas
-                                      ref={canvasRef}
-                                      width={300}
-                                      height={140}
-                                      style={{ width: "100%", height: "140px" }}
-                                      onMouseDown={startDrawing}
-                                      onMouseMove={draw}
-                                      onMouseUp={stopDrawing}
-                                      onMouseLeave={stopDrawing}
-                                      onTouchStart={startDrawing}
-                                      onTouchMove={draw}
-                                      onTouchEnd={stopDrawing}
-                                    />
-                                  ) : (
-                                    <div className="h-[140px] flex items-center justify-center p-2 bg-[#21242C]">
-                                      {canvasUrl ? (
-                                        <div className="relative text-center">
-                                          <img
-                                            src={canvasUrl}
-                                            alt="Sealed Client Signature"
-                                            className="mx-auto max-h-[100px] object-contain invert brightness-125"
-                                          />
-                                          <span className="text-[9px] font-mono text-emerald-400 block mt-1.5 font-bold">
-                                            Signature Sealed
-                                          </span>
-                                        </div>
+                                  {/* SMS Validation step if toggled */}
+                                  {smsVerification && !smsVerified ? (
+                                    <div className="p-3 rounded-lg border border-amber-900/50 bg-amber-950/25 space-y-2">
+                                      <span className="font-mono text-[9px] font-extrabold text-amber-400 uppercase tracking-wild flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" /> SMS Authentication Lock
+                                      </span>
+                                      <p className="text-[10px] text-[#A0A0A0] leading-tight">
+                                        To draw your signature on the digital canvas, verify your mobile number.
+                                      </p>
+                                      {!smsSent ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setSmsSent(true)}
+                                          className="w-full py-1.5 rounded bg-[#F27D26] hover:bg-orange-400 text-black text-[11px] font-bold transition-all"
+                                        >
+                                          Send Mock SMS code (1234)
+                                        </button>
                                       ) : (
-                                        <span className="text-xs text-[#A0A0A0]">Digitized and validated</span>
+                                        <div className="space-y-1.5">
+                                          <div className="text-[9.5px] text-emerald-400 font-mono">🔐 Mock SMS Sent! Code to input is: <strong className="underline">1234</strong></div>
+                                          <div className="flex gap-1.5">
+                                            <input
+                                              type="text"
+                                              maxLength={4}
+                                              value={verificationCode}
+                                              onChange={(e) => setVerificationCode(e.target.value)}
+                                              placeholder="Enter 4-Digit Code"
+                                              className="flex-1 bg-[#1A1D23] border border-[#3D414D] rounded-md p-1.5 text-center text-xs text-white focus:outline-hidden font-bold"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                if (verificationCode === "1234") {
+                                                  setSmsVerified(true);
+                                                } else {
+                                                  alert("Invalid mock simulation code! Type '1234' to verify.");
+                                                }
+                                              }}
+                                              className="px-3 bg-emerald-500 text-black text-xs font-bold rounded-md hover:bg-emerald-400"
+                                            >
+                                              Verify
+                                            </button>
+                                          </div>
+                                        </div>
                                       )}
+                                    </div>
+                                  ) : (
+                                    /* Active Mobile Signature pad */
+                                    <div className="space-y-2.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-mono font-bold uppercase text-[#5C616F]">Mobile Ink Sign Pad</span>
+                                        <button
+                                          type="button"
+                                          onClick={clearCanvas}
+                                          className="text-[9.5px] text-red-400 font-bold hover:text-red-300"
+                                        >
+                                          Clear Canvas
+                                        </button>
+                                      </div>
+
+                                      {/* Responsive touch-enabled drawing canvas block */}
+                                      <div className="relative border-2 border-dashed border-[#3D414D] rounded-xl bg-black overflow-hidden cursor-crosshair">
+                                        {signProgress === "pending" ? (
+                                          <canvas
+                                            ref={canvasRef}
+                                            width={320}
+                                            height={120}
+                                            style={{ width: "100%", height: "120px" }}
+                                            onMouseDown={startDrawing}
+                                            onMouseMove={draw}
+                                            onMouseUp={stopDrawing}
+                                            onMouseLeave={stopDrawing}
+                                            onTouchStart={startDrawing}
+                                            onTouchMove={draw}
+                                            onTouchEnd={stopDrawing}
+                                          />
+                                        ) : (
+                                          <div className="h-[120px] flex items-center justify-center p-2 bg-[#1A1D23]">
+                                            {canvasUrl ? (
+                                              <div className="relative text-center">
+                                                <img
+                                                  src={canvasUrl}
+                                                  alt="Sealed Client Signature"
+                                                  className="mx-auto max-h-[85px] object-contain invert brightness-125"
+                                                />
+                                                <span className="text-[10px] font-mono text-emerald-400 block mt-1 font-bold">
+                                                  ✓ Signature Sealed
+                                                </span>
+                                              </div>
+                                            ) : (
+                                              <span className="text-xs text-[#A0A0A0]">Digitized and validated</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Seal execution control */}
+                                      <div className="pt-2">
+                                        {signProgress === "pending" ? (
+                                          <button
+                                            type="button"
+                                            onClick={handleSealSignature}
+                                            className="w-full inline-flex items-center justify-center rounded-xl bg-[#F27D26] hover:bg-orange-400 font-extrabold transition-all px-3 py-2.5 text-xs text-black"
+                                          >
+                                            <Signature className="mr-1.5 h-3.5 w-3.5" />
+                                            Tap to Instant Seal and Sign
+                                          </button>
+                                        ) : (
+                                          <div className="space-y-1.5">
+                                            <div className="flex items-center justify-center space-x-1.5 text-emerald-400 font-bold text-[11px] bg-[#142A24] border border-[#1E4D3E] p-2.5 rounded-lg">
+                                              <CheckCircle className="h-4 w-4 text-emerald-400" />
+                                              <span>Agreement Signed from Mobile!</span>
+                                            </div>
+                                            <button
+                                              onClick={() => {
+                                                setGeneratedProposal(null);
+                                                clearCanvas();
+                                                setSignProgress("pending");
+                                                setSmsVerified(false);
+                                                setSmsSent(false);
+                                                setVerificationCode("");
+                                              }}
+                                              className="w-full py-2 bg-[#21242C] border border-[#3D414D] text-[#A0A0A0] text-xs font-bold rounded-lg hover:text-white"
+                                            >
+                                              Reset Simulator
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   )}
                                 </div>
-                              </div>
-                            </div>
-
-                            <div className="pt-4 border-t border-[#2A2D35] mt-4 space-y-2">
-                              {signProgress === "pending" ? (
-                                <button
-                                  type="button"
-                                  onClick={handleSealSignature}
-                                  className="w-full inline-flex items-center justify-center rounded-lg bg-[#F27D26] hover:bg-orange-400 font-bold transition-all px-3 py-2.5 text-xs text-black shadow-md shadow-orange-950/20"
-                                >
-                                  <Signature className="mr-1.5 h-3.5 w-3.5" />
-                                  Execute & Digitally Seal Agreement
-                                </button>
                               ) : (
-                                <div className="space-y-2.5">
-                                  <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs bg-[#142A24] border border-[#1E4D3E] p-3 rounded-lg">
-                                    <CheckCircle className="h-4.5 w-4.5 shrink-0 text-emerald-400" />
-                                    <span>Success! Vault Transaction Executed</span>
+                                /* CHOSEN ENGINE: DOCUSEAL CLIENT VIEW SIMULATOR INSIDE THE SMARTPHONE */
+                                <div className="p-4 space-y-4 flex-1 flex flex-col bg-[#0F1115]">
+                                  <div className="rounded-lg border border-[#311C47] bg-[#1a1226] p-3 text-left">
+                                    <span className="font-mono text-[8px] uppercase text-purple-400 font-extrabold">Enterprise Dispatch Hub</span>
+                                    <h4 className="text-[11px] font-bold text-white mt-1">DocuSeal Mobile Request</h4>
+                                    <span className="text-[10px] text-[#A0A0A0] block mt-0.5">Concept Engineers uploaded contract</span>
                                   </div>
-                                  <button
-                                    onClick={() => {
-                                      setGeneratedProposal(null);
-                                      clearCanvas();
-                                      setSignProgress("pending");
-                                    }}
-                                    className="w-full inline-flex items-center justify-center rounded-lg border border-[#3D414D] bg-[#0F1115] hover:bg-[#1A1D23] px-3.5 py-2.5 text-xs font-bold text-white transition-all"
-                                  >
-                                    Prepare Next Proposal Form
-                                  </button>
+
+                                  {docusealStatus === "sent" ? (
+                                    <div className="space-y-3 flex-1 flex flex-col justify-between">
+                                      {/* Mock DocuSeal Embedded Signature Sheet */}
+                                      <div className="border border-purple-900/50 rounded-xl bg-[#120F1C] p-3 shadow-inner flex-1 flex flex-col justify-between text-left">
+                                        <div className="space-y-2">
+                                          <div className="flex items-center justify-between border-b border-[#2d2242] pb-1.5 text-[9px] font-mono text-purple-300">
+                                            <span>docuseal.co/sign/inv_91238</span>
+                                            <span className="font-bold">2 FIELDS REMAINING</span>
+                                          </div>
+                                          
+                                          <label className="text-[9px] font-mono uppercase text-purple-400 flex justify-between">
+                                            <span>Field 1: Representative Name</span>
+                                            <span className="text-red-400 font-bold">*required</span>
+                                          </label>
+                                          <input
+                                            type="text"
+                                            readOnly
+                                            value={clientName}
+                                            className="w-full bg-[#1A1829] border border-purple-900/60 rounded-md p-1.5 text-xs text-white"
+                                          />
+
+                                          <label className="text-[9px] font-mono uppercase text-purple-400 flex justify-between">
+                                            <span>Field 2: Location Address Confirmation</span>
+                                            <span className="text-red-400 font-bold">*required</span>
+                                          </label>
+                                          <input
+                                            type="text"
+                                            readOnly
+                                            value={projectAddress}
+                                            className="w-full bg-[#1A1829] border border-purple-900/60 rounded-md p-1.5 text-[10.5px] text-[#A0A0A0]"
+                                          />
+
+                                          <div className="border border-dashed border-purple-800/40 bg-purple-950/15 rounded-lg p-2.5 text-center mt-3">
+                                            <span className="block text-[8px] font-mono uppercase text-purple-300 mb-1">Finger Signature Seal Area</span>
+                                            <div className="h-16 bg-[#130E21] border border-purple-900/40 rounded flex items-center justify-center cursor-pointer hover:border-[#F27D26]" onClick={() => setDocusealStatus("signing_completed")}>
+                                              <span className="text-[10px] text-purple-400 italic">Click here to Sign in DocuSeal</span>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <p className="text-[8.5px] text-[#5C616F] text-center mt-2 leading-tight">
+                                          DocuSeal self-hosted engine fully isolates and respects regional data residency guidelines.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ) : docusealStatus === "signing_completed" ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 p-4">
+                                      <div className="h-12 w-12 rounded-full bg-purple-950 border border-purple-500 text-purple-300 flex items-center justify-center animate-bounce shadow">
+                                        <Check className="h-6 w-6" />
+                                      </div>
+                                      <div>
+                                        <h4 className="text-sm font-bold text-white">DocuSeal Complete!</h4>
+                                        <p className="text-[10.5px] text-[#A0A0A0] mt-1.5 leading-normal">
+                                          The client signature has been validated and recorded securely within the local system audit archive files. No logins or passwords needed.
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setDocusealStatus("sent")}
+                                        className="py-1.5 px-4 rounded bg-purple-900 text-white text-xs font-bold hover:bg-purple-800"
+                                      >
+                                        Re-sign Envelope
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3 p-4">
+                                      <div className="h-9 w-9 rounded-full bg-[#1A1D23] border border-[#2A2D35] flex items-center justify-center text-purple-400">
+                                        <Send className="h-4.5 w-4.5" />
+                                      </div>
+                                      <p className="text-xs text-[#A0A0A0]">
+                                        Please dispatch the DocuSeal envelope from the desktop panel first to initiate mobile client signature request.
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               )}
-                              <p className="text-[9px] text-[#5C616F] text-center font-mono">
-                                Generates secure SHA-256 audit trails directly on sign.conceptengineers.com.au.
-                              </p>
                             </div>
-                          </div>
 
+                            {/* Home Slider bar */}
+                            <div className="absolute bottom-1 w-28 h-1 bg-[#2A2D35] rounded-full left-1/2 -translate-x-1/2 z-20"></div>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        /* STANDARD DESKTOP/TABLET VIEW */
+                        <div className="space-y-6">
+                          
+                          {/* CHOSEN ENGINE: DOCUSEAL ENTERPRISE PANEL */}
+                          {signingEngine === "docuseal" ? (
+                            <div className="rounded-2xl border border-[#311C47] bg-[#150F21] p-5 shadow-xl space-y-5">
+                              <div className="flex items-center justify-between pb-3.5 border-b border-[#311C47]">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-8 w-8 rounded-lg bg-[#2E0B4E] border border-purple-500/30 flex items-center justify-center text-purple-300 font-extrabold font-mono text-base">
+                                    D
+                                  </div>
+                                  <div>
+                                    <h4 className="font-display font-bold text-white text-sm uppercase tracking-wide">DocuSeal Enterprise Dispatcher</h4>
+                                    <span className="text-[10px] font-mono text-purple-400">DigitalOcean Self-Hosted container simulation</span>
+                                  </div>
+                                </div>
+                                <span className="font-mono text-[9px] text-[#F27D26] bg-[#21242C] px-2.5 py-0.5 rounded border border-[#F27D26]/20 font-bold">
+                                  API Queue: Listening
+                                </span>
+                              </div>
+
+                              {/* Live JSON Payload visualizer */}
+                              <div className="space-y-4">
+                                <span className="text-[11px] text-[#A0A0A0] leading-relaxed block">
+                                  DocuSeal maps variables statically typed inside MS Word (.docx) templates like <code className="bg-[#2E184A] px-1 text-purple-300">{"{client_name}"}</code> or <code className="bg-[#2E184A] px-1 text-purple-300">{"{project_address}"}</code> directly from custom payloads.
+                                </span>
+
+                                <div className="rounded-xl bg-[#0B0813] border border-[#301F4E] p-4 font-mono text-xs">
+                                  <div className="flex justify-between items-center text-[10px] text-purple-400 border-b border-[#221538] pb-1.5 mb-2">
+                                    <span>POST /v1/submissions (DocuSeal API Request)</span>
+                                    <span>Payload Config</span>
+                                  </div>
+                                  <pre className="text-[11px] text-[#D4C3FB] overflow-x-auto whitespace-pre leading-relaxed text-left">
+{`{
+  "template_id": "${docusealTemplateId}",
+  "submitters": [
+    {
+      "role": "Client",
+      "email": "${clientEmail || "client@metrohomes.com"}",
+      "name": "${clientName || "John Smith"}",
+      "fields": [
+        { "name": "${docusealFieldMapping.clientNamePlaceholder}", "value": "${clientName || "John Smith"}" },
+        { "name": "${docusealFieldMapping.addressPlaceholder}", "value": "${projectAddress || "Lot 2A, Broadwater Way"}" },
+        { "name": "${docusealFieldMapping.feePlaceholder}", "value": "$${parseFloat(fee).toLocaleString("en-AU")} AUD (ex. GST)" }
+      ]
+    }
+  ]
+}`}
+                                  </pre>
+                                </div>
+
+                                {/* Send / Publish controls */}
+                                <div className="pt-3 border-t border-[#311C47] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                                  <div className="text-left">
+                                    <span className="text-[10px] uppercase font-mono text-[#5C616F] block">Invitee Email</span>
+                                    <span className="text-white text-xs font-semibold">{clientEmail || "client@metrohomes.com"}</span>
+                                  </div>
+
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDocusealStatus("preparing");
+                                        setTimeout(() => {
+                                          setDocusealStatus("sent");
+                                          alert("DocuSeal Simulated Request Published! Switch viewport perspective to Mobile to sign without logging in!");
+                                        }, 1000);
+                                      }}
+                                      className="py-2.5 px-4 rounded-lg bg-gradient-to-r from-purple-600 to-[#F27D26] hover:from-purple-500 hover:to-orange-400 font-extrabold text-xs text-white shadow"
+                                    >
+                                      {docusealStatus === "preparing" ? "Syncing variables..." : "Publish & Send DocuSeal Invitation"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Interactive Embedded simulator of DocuSeal dashboard */}
+                              {docusealStatus === "sent" || docusealStatus === "signing_completed" ? (
+                                <div className="p-4 rounded-xl bg-[#0E0B16] border border-purple-900/40 text-left space-y-4">
+                                  <div className="flex items-center justify-between text-xs text-[#A0A0A0] border-b border-[#201A33] pb-2">
+                                    <span className="font-mono text-xs">DocuSeal Embedded Console sandbox</span>
+                                    <span className="text-[9.5px] text-emerald-400 font-bold flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span> Envelope Sent
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 h-[260px]">
+                                    <div className="md:col-span-8 bg-[#151121] border border-[#2A1D42] rounded-lg p-4 overflow-y-auto text-xs space-y-3 font-mono">
+                                      <span className="text-[10.5px] font-bold text-white uppercase block mb-3 border-b border-[#2d2242] pb-1">CONSTRUCTED SERVICES PROPOSAL (DocuSeal PDF View)</span>
+                                      <div className="space-y-2 font-sans text-[#A0A0A0]">
+                                        <p><strong>RE:</strong> Engineering Services for <strong>{projectType}</strong> Project at <strong>{projectAddress}</strong>.</p>
+                                        <p>Total consideration payable on completion representing standard compliance is <strong>${parseFloat(fee).toLocaleString("en-AU")} AUD (ex. GST)</strong>.</p>
+                                      </div>
+                                    </div>
+                                    <div className="md:col-span-4 bg-[#1B162C] border border-[#2C1D42] rounded-lg p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] font-mono font-bold uppercase text-purple-300">Target Action Fields</span>
+                                      
+                                      {docusealStatus === "signing_completed" ? (
+                                        <div className="text-center p-3 bg-purple-950/30 border border-purple-900/60 rounded-md">
+                                          <Check className="h-5 w-5 text-emerald-400 mx-auto" />
+                                          <span className="text-[11px] text-white font-bold block mt-1">Submitter Completed</span>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setDocusealStatus("signing_completed");
+                                            // Archive it
+                                            const newContract = {
+                                              id: "PROP-" + Math.floor(10000 + Math.random() * 90000),
+                                              clientName: clientName || "Anonymous Representative",
+                                              projectType,
+                                              projectAddress: projectAddress || "Address standard check",
+                                              fee: fee || "3500",
+                                              date: new Date().toLocaleDateString("en-AU"),
+                                              status: "Signed",
+                                              signatureUrl: "docuseal_digital_verified",
+                                              auditHash: "DOCUSEAL:" + Math.random().toString(16).substring(2, 9).toUpperCase()
+                                            };
+                                            setContractsArchive([newContract, ...contractsArchive]);
+                                          }}
+                                          className="w-full py-2 bg-[#F27D26] hover:bg-orange-400 text-black font-extrabold text-xs rounded-lg"
+                                        >
+                                          Sign instantly here
+                                        </button>
+                                      )}
+
+                                      <p className="text-[9px] text-[#A0A0A0]">
+                                        Submitter completes with 0 downloads required.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            /* PORTAL DIRECT: STANDARD COMPREHENSIVE VIEW */
+                            <div className="space-y-6">
+                              {/* Interactive Link Proxy Card */}
+                              <div className="rounded-2xl border border-[#2A2D35] bg-[#1A1D23] p-5 shadow-xl">
+                                <div className="flex items-center justify-between pb-3.5 border-b border-[#2A2D35] mb-4">
+                                  <h4 className="font-display font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                                    <Globe className="h-4 w-4 text-[#F27D26]" />
+                                    Secure Customized Domain link
+                                  </h4>
+                                  <span className="font-mono text-[9px] text-[#F27D26] bg-[#21242C] px-2.5 py-0.5 rounded border border-[#F27D26]/20 font-bold">
+                                    SSL Sec: Valid (HTTPS)
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:space-x-3 items-stretch">
+                                  <div className="flex-1">
+                                    <label className="text-[10px] font-mono font-bold uppercase text-[#5C616F] tracking-wider">
+                                      A-Record Target Domain Link (DocuSeal Link Proxy)
+                                    </label>
+                                    <div className="mt-1.5 flex rounded-lg overflow-hidden border border-[#3D414D]">
+                                      <span className="inline-flex items-center bg-[#0F1115] px-3 text-xs font-mono text-[#5C616F] select-all border-r border-[#3D414D]">
+                                        sign.conceptengineers.com.au/sign/
+                                      </span>
+                                      <input
+                                        type="text"
+                                        readOnly
+                                        value={`proposal_${projectType.toLowerCase()}_${clientName.replace(/\s+/g, "").toLowerCase().substring(0, 8)}`}
+                                        className="block w-full min-w-0 bg-[#0F1115] p-2 text-xs font-mono text-white focus:outline-hidden"
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-end">
+                                    <button
+                                      type="button"
+                                      onClick={handleCopyText}
+                                      className="w-full sm:w-auto inline-flex items-center justify-center rounded-lg border border-[#3D414D] bg-[#0F1115] text-white hover:bg-[#21242C] hover:border-[#F27D26] px-4 py-2.5 text-xs font-bold transition-all"
+                                    >
+                                      <Copy className="mr-1.5 h-3.5 w-3.5 text-[#F27D26]" />
+                                      {copiedText ? "Copied" : "Copy Content"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Professional Contract Sandbox Window */}
+                              <div className="rounded-2xl border border-[#2A2D35] bg-[#1A1D23] shadow-2xl overflow-hidden">
+                                
+                                {/* Interactive DocuSeal Header Block */}
+                                <div className="bg-[#0F1115] px-5 py-3.5 flex items-center justify-between text-white border-b border-[#2A2D35]">
+                                  <div className="flex items-center space-x-2.5">
+                                    <Signature className="h-4.5 w-4.5 text-[#F27D26]" />
+                                    <span className="text-xs font-mono tracking-wider font-semibold text-white/90">
+                                      sign.conceptengineers.com.au — Client Mobile Sign Sheet
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center space-x-1.5">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Active</span>
+                                  </div>
+                                </div>
+
+                                {/* Split Interface: Scrollable Text + Signing Panel */}
+                                <div className="grid grid-cols-1 md:grid-cols-12 min-h-[500px]">
+                                  
+                                  {/* Left Half: Embedded Proposal Contract Content */}
+                                  <div id="document-viewer" className="md:col-span-7 bg-[#0F1115] border-r border-[#2A2D35] p-6 text-sm text-[#E0E0E0] max-h-[500px] overflow-y-auto select-text font-mono scrollbar-thin">
+                                    {loading ? (
+                                      <div className="flex flex-col items-center justify-center h-full space-y-3 py-20">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F27D26]"></div>
+                                        <span className="text-xs font-mono text-[#A0A0A0]">Drafting scope items...</span>
+                                      </div>
+                                    ) : (
+                                      <div className="prose prose-invert max-w-none text-xs text-left">
+                                        {/* Corporate Header Layout */}
+                                        <div className="border-b-2 border-[#2A2D35] pb-4 mb-5 flex justify-between items-start">
+                                          <div>
+                                            <h4 className="font-display text-base font-bold text-white tracking-tight uppercase">
+                                              CONCEPT ENGINEERS PTY LTD
+                                            </h4>
+                                            <p className="text-[9px] text-[#A0A0A0] font-mono mt-0.5">
+                                              AS Civil & Structural Registered Consultants • sign.conceptengineers.com.au
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <span className="rounded bg-[#21242C] border border-[#F27D26]/30 px-2 py-0.5 text-[9px] font-mono font-bold text-[#F27D26] uppercase">
+                                              E-SIGN CONTRACT
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="whitespace-pre-wrap font-sans text-[#E0E0E0] leading-relaxed text-xs">
+                                          {generatedProposal}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Right Half: Mobile Sign Pad Frame */}
+                                  <div className="md:col-span-5 bg-[#191C21] p-5 flex flex-col justify-between border-t md:border-t-0 border-[#2A2D35] text-left">
+                                    <div>
+                                      <div className="flex items-center space-x-2 text-[#F27D26] mb-2.5">
+                                        <FileCheck className="h-4.5 w-4.5" />
+                                        <h5 className="font-display font-semibold text-white text-xs uppercase tracking-wider">
+                                          Verification E-Sign Pad
+                                        </h5>
+                                      </div>
+                                      <p className="text-[11px] text-[#A0A0A0] mb-4 leading-relaxed">
+                                        Clients securely sign from any touchscreen or cursor with 0 logging credentials required. Draw on the block to digitize.
+                                      </p>
+
+                                      <div className="space-y-4">
+                                        <div className="flex flex-col gap-1">
+                                          <label className="text-[9px] font-mono font-bold uppercase text-[#5C616F]">
+                                            Signer Signature Name
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={signerName}
+                                            onChange={(e) => setSignerName(e.target.value)}
+                                            placeholder="Confirm Signer Name"
+                                            className="bg-[#0F1115] border border-[#3D414D] rounded-md p-2 text-xs text-white focus:outline-none focus:border-[#F27D26] transition-all"
+                                          />
+                                        </div>
+
+                                        <div className="flex flex-col gap-1">
+                                          <label className="text-[9px] font-mono font-bold uppercase text-[#5C616F]">
+                                            System Signing Timestamp
+                                          </label>
+                                          <input
+                                            type="text"
+                                            disabled
+                                            value={signerDate}
+                                            className="bg-[#0F1115] border border-[#2A2D35] rounded-md p-2 text-xs text-[#A0A0A0] font-mono"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Canvas Box */}
+                                      <div className="mt-4">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className="text-[9px] font-mono font-bold uppercase text-[#5C616F]">
+                                            Digital Ink Canvas
+                                          </label>
+                                          <button
+                                            onClick={clearCanvas}
+                                            className="text-[10px] text-red-400 hover:text-red-300 font-semibold"
+                                          >
+                                            Reset / Clear
+                                          </button>
+                                        </div>
+
+                                        <div className="relative border-2 border-dashed border-[#3D414D] rounded-lg bg-[#0F1115] overflow-hidden cursor-crosshair">
+                                          {signProgress === "pending" ? (
+                                            <canvas
+                                              ref={canvasRef}
+                                              width={300}
+                                              height={140}
+                                              style={{ width: "100%", height: "140px" }}
+                                              onMouseDown={startDrawing}
+                                              onMouseMove={draw}
+                                              onMouseUp={stopDrawing}
+                                              onMouseLeave={stopDrawing}
+                                              onTouchStart={startDrawing}
+                                              onTouchMove={draw}
+                                              onTouchEnd={stopDrawing}
+                                            />
+                                          ) : (
+                                            <div className="h-[140px] flex items-center justify-center p-2 bg-[#21242C]">
+                                              {canvasUrl ? (
+                                                <div className="relative text-center">
+                                                  <img
+                                                    src={canvasUrl}
+                                                    alt="Sealed Client Signature"
+                                                    className="mx-auto max-h-[100px] object-contain invert brightness-125"
+                                                  />
+                                                  <span className="text-[9px] font-mono text-emerald-400 block mt-1.5 font-bold">
+                                                    Signature Sealed
+                                                  </span>
+                                                </div>
+                                              ) : (
+                                                <span className="text-xs text-[#A0A0A0]">Digitized and validated</span>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-[#2A2D35] mt-4 space-y-2">
+                                      {signProgress === "pending" ? (
+                                        <button
+                                          type="button"
+                                          onClick={handleSealSignature}
+                                          className="w-full inline-flex items-center justify-center rounded-lg bg-[#F27D26] hover:bg-orange-400 font-bold transition-all px-3 py-2.5 text-xs text-black shadow-md shadow-orange-950/20"
+                                        >
+                                          <Signature className="mr-1.5 h-3.5 w-3.5" />
+                                          Execute & Digitally Seal Agreement
+                                        </button>
+                                      ) : (
+                                        <div className="space-y-2.5">
+                                          <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs bg-[#142A24] border border-[#1E4D3E] p-3 rounded-lg">
+                                            <CheckCircle className="h-4.5 w-4.5 shrink-0 text-emerald-400" />
+                                            <span>Success! Vault Transaction Executed</span>
+                                          </div>
+                                          <button
+                                            onClick={() => {
+                                              setGeneratedProposal(null);
+                                              clearCanvas();
+                                              setSignProgress("pending");
+                                            }}
+                                            className="w-full inline-flex items-center justify-center rounded-lg border border-[#3D414D] bg-[#0F1115] hover:bg-[#1A1D23] px-3.5 py-2.5 text-xs font-bold text-white transition-all"
+                                          >
+                                            Prepare Next Proposal Form
+                                          </button>
+                                        </div>
+                                      )}
+                                      <p className="text-[9px] text-[#5C616F] text-center font-mono">
+                                        Generates secure SHA-256 audit trails directly on sign.conceptengineers.com.au.
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
