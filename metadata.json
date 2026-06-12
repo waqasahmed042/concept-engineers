@@ -1,0 +1,8 @@
+{
+  "name": "Concept Engineers Proposal Hub",
+  "description": "An interactive prototype and feasibility guide for the Concept Engineers Proposal Generation & E-Sign System with DocuSeal integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
